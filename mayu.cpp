@@ -239,9 +239,13 @@ void mayu::work()
     if (jsonFile.open(QSaveFile::WriteOnly)) {
         jsonFile.write(jsonArray);
         if (!jsonFile.commit()) {
-            qCritical() << "Failed save result to" << p_jsonFile;
+            qCritical() << "Failed save result to" << p_jsonFile << "because file can't be saved!";
             p_return = 1;
         }
+    }
+    else {
+        qCritical() << "Failed save result to" << p_jsonFile << "because file can't be opened!";
+        p_return = 1;
     }
     if (!regainPrivileges()) {
         p_return = 3;
