@@ -27,13 +27,15 @@ class mayu : public QObject
 {
     Q_OBJECT
 public:
-    explicit mayu(QObject *parent = nullptr);
+    explicit mayu(const QString &hostsFile = QString(), const QString &jsonFile = QString(), int tries = 4, QObject *parent = nullptr);
     void setHostsFile(const QString &fileName);
     void setHosts(const QStringList &hostsList);
     void setJsonFile(const QString &fileName);
+    void setMaxTries(int tries);
     const QString getHostsFile();
     const QStringList getHosts();
     const QString getJsonFile();
+    int getMaxTries();
     int getResult();
     static double ping(const QString &host, int tries, double timeout = 2.5);
 

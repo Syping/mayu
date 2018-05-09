@@ -29,9 +29,7 @@ int main(int argc, char *argv[])
     arguments.removeAt(0);
 
     if (arguments.length() >= 2) {
-        mayu a_mayu;
-        a_mayu.setHostsFile(arguments.at(0));
-        a_mayu.setJsonFile(arguments.at(1));
+        mayu a_mayu(arguments.at(0), arguments.at(1));
         a_mayu.work();
         return a_mayu.getResult();
     }

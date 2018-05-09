@@ -30,10 +30,14 @@ extern "C" {
 #include "oping.h"
 }
 
-mayu::mayu(QObject *parent) : QObject(parent)
+mayu::mayu(const QString &hostsFile, const QString &jsonFile, int tries, QObject *parent) : QObject(parent)
 {
     p_return = -1;
-    p_tries = 4;
+    p_tries = tries;
+    if (!hostsFile.isEmpty())
+        setHostsFile(hostsFile);
+    if (!jsonFile.isEmpty())
+        setJsonFile(jsonFile);
 }
 
 void mayu::setHostsFile(const QString &fileName)
@@ -53,6 +57,11 @@ void mayu::setJsonFile(const QString &fileName)
     p_jsonFile = fileName;
 }
 
+void mayu::setMaxTries(int tries)
+{
+    p_tries = tries;
+}
+
 const QString mayu::getHostsFile()
 {
     return p_hostsFile;
@@ -66,6 +75,11 @@ const QStringList mayu::getHosts()
 const QString mayu::getJsonFile()
 {
     return p_jsonFile;
+}
+
+int mayu::getMaxTries()
+{
+    return p_tries;
 }
 
 int mayu::getResult()
@@ -196,7 +210,7 @@ void mayu::parse_hosts()
     }
     else
     {
-        cerr << "Failed read hosts from " << p_hostsFile.toStdString().c_str();
+        qCritical() << "Failed read hosts from" << p_hostsFile;
     }
     if (!regainPrivileges()) {
         p_return = 3;
@@ -225,7 +239,7 @@ void mayu::work()
     if (jsonFile.open(QSaveFile::WriteOnly)) {
         jsonFile.write(jsonArray);
         if (!jsonFile.commit()) {
-            cerr << "Failed save result to " << p_jsonFile.toStdString().c_str();
+            qCritical() << "Failed save result to" << p_jsonFile;
             p_return = 1;
         }
     }
@@ -242,7 +256,7 @@ bool mayu::dropPrivileges()
     p_uid = geteuid();
     int status = seteuid(getuid());
     if (status != 0) {
-        cerr << "Dropping of privileges has failed!";
+        qCritical() << "Dropping of privileges has failed!";
         return false;
     }
     return true;
@@ -256,7 +270,7 @@ bool mayu::regainPrivileges()
 #if _POSIX_SAVED_IDS
     int status = seteuid(p_uid);
     if (status != 0) {
-        cerr << "Regaining of privileges has failed!";
+        qCritical() << "Regaining of privileges has failed!";
         return false;
     }
     return true;
