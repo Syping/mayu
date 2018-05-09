@@ -143,12 +143,12 @@ double mayu::ping(const QString &host, int tries, double timeout)
         bool pingSuccess = false;
         for (pingIter = ping_iterator_get(pingObj); pingIter != NULL; pingIter =
              ping_iterator_next(pingIter)) {
-            char hostname[100];
             size_t len;
             len = sizeof(double);
             ping_iterator_get_info(pingIter, PING_INFO_LATENCY, &latency, &len);
             pingSuccess = !(latency < 0);
 #ifdef E_DEBUG
+            char hostname[100];
             len = 100;
             ping_iterator_get_info(pingIter, PING_INFO_HOSTNAME, hostname, &len);
             qDebug() << hostname << latency << pingSuccess;
@@ -168,9 +168,10 @@ double mayu::ping(const QString &host, int tries, double timeout)
 void mayu::parse_hosts()
 {
     p_hostsList.clear();
-    /**
-      Drop here
-      **/
+    if (!dropPrivileges()) {
+        p_return = 2;
+        return;
+    }
     QFile hostsFile(p_hostsFile);
     if (hostsFile.open(QFile::ReadOnly)) {
         const QList<QByteArray> hostsArray = hostsFile.readAll().split('\n');
@@ -197,9 +198,10 @@ void mayu::parse_hosts()
     {
         cerr << "Failed read hosts from " << p_hostsFile.toStdString().c_str();
     }
-    /**
-      Regain here
-      **/
+    if (!regainPrivileges()) {
+        p_return = 3;
+        return;
+    }
 }
 
 void mayu::work()
@@ -215,9 +217,10 @@ void mayu::work()
     QJsonDocument jsonDocument;
     jsonDocument.setObject(jsonObject);
     QByteArray jsonArray = jsonDocument.toJson();
-    /**
-      Drop here
-      **/
+    if (!dropPrivileges()) {
+        p_return = 2;
+        return;
+    }
     QSaveFile jsonFile(p_jsonFile);
     if (jsonFile.open(QSaveFile::WriteOnly)) {
         jsonFile.write(jsonArray);
@@ -226,8 +229,38 @@ void mayu::work()
             p_return = 1;
         }
     }
-    /**
-      Regain here
-      **/
+    if (!regainPrivileges()) {
+        p_return = 3;
+        return;
+    }
     p_return = 0;
+}
+
+bool mayu::dropPrivileges()
+{
+#if _POSIX_SAVED_IDS
+    p_uid = geteuid();
+    int status = seteuid(getuid());
+    if (status != 0) {
+        cerr << "Dropping of privileges has failed!";
+        return false;
+    }
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool mayu::regainPrivileges()
+{
+#if _POSIX_SAVED_IDS
+    int status = seteuid(p_uid);
+    if (status != 0) {
+        cerr << "Regaining of privileges has failed!";
+        return false;
+    }
+    return true;
+#else
+    return false;
+#endif
 }

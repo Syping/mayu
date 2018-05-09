@@ -42,12 +42,15 @@ public slots:
     void work();
 
 private:
+    bool dropPrivileges();
+    bool regainPrivileges();
     QStringList p_hostsList;
     QString p_hostsFile;
     QString p_jsonFile;
     bool p_hostsParsed;
     int p_return;
     int p_tries;
+    uid_t p_uid;
 };
 
 #endif // MAYU_H

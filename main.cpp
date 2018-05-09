@@ -21,6 +21,7 @@
 
 int main(int argc, char *argv[])
 {
+    QCoreApplication::setSetuidAllowed(true);
     QCoreApplication a(argc, argv);
     a.setApplicationName("mayu");
 
