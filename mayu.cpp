@@ -360,8 +360,11 @@ void mayu::p_workHosts(const QList<QByteArray> &hostsArray)
 #ifdef MAYU_UNIX
 void mayu::p_workPing()
 {
-    if (!p_hostsParsed)
+    if (!p_hostsParsed) {
         parse_hosts();
+        if (!p_hostsParsed)
+            return;
+    }
     QJsonObject jsonObject;
     const QStringList hostsList = getHosts();
     for (const QString &host : hostsList) {
@@ -376,8 +379,11 @@ void mayu::p_workPing()
 
 void mayu::p_workResolve()
 {
-    if (!p_hostsParsed)
+    if (!p_hostsParsed) {
         parse_hosts();
+        if (!p_hostsParsed)
+            return;
+    }
     QJsonObject jsonObject;
     const QStringList hostsList = getHosts();
     for (const QString &host : hostsList) {
