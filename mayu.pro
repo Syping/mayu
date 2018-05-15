@@ -18,7 +18,9 @@
 QT -= gui
 QT += network
 
-LIBS += -loping
+unix: DEFINES += PRIVILEGE_DROP_REQUIRED
+unix: DEFINES += MAYU_UNIX
+unix: LIBS += -loping
 
 CONFIG += c++11 console
 CONFIG -= app_bundle

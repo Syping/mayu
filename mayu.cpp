@@ -26,18 +26,27 @@
 #include <iostream>
 using namespace std;
 
+#ifdef MAYU_UNIX
 extern "C" {
 #include "oping.h"
 }
+#endif
 
-mayu::mayu(const QString &hostsFile, const QString &jsonFile, int tries, QObject *parent) : QObject(parent)
+mayu::mayu(const QString &hostsFile, const QString &jsonFile, QObject *parent) : QObject(parent)
 {
     p_return = -1;
-    p_tries = tries;
+    p_timeout = 2.5;
+    p_tries = 4;
+    p_mayuMode = mayuMode::Ping;
     if (!hostsFile.isEmpty())
         setHostsFile(hostsFile);
     if (!jsonFile.isEmpty())
         setJsonFile(jsonFile);
+}
+
+void mayu::setMayuMode(mayuMode mode)
+{
+    p_mayuMode = mode;
 }
 
 void mayu::setHostsFile(const QString &fileName)
@@ -57,9 +66,19 @@ void mayu::setJsonFile(const QString &fileName)
     p_jsonFile = fileName;
 }
 
-void mayu::setMaxTries(int tries)
+void mayu::setPingTimeout(double timeout)
+{
+    p_timeout = timeout;
+}
+
+void mayu::setPingTries(int tries)
 {
     p_tries = tries;
+}
+
+mayuMode mayu::getMayuMode()
+{
+    return p_mayuMode;
 }
 
 const QString mayu::getHostsFile()
@@ -77,7 +96,12 @@ const QString mayu::getJsonFile()
     return p_jsonFile;
 }
 
-int mayu::getMaxTries()
+double mayu::getPingTimeout()
+{
+    return p_timeout;
+}
+
+int mayu::getPingTries()
 {
     return p_tries;
 }
@@ -87,21 +111,18 @@ int mayu::getResult()
     return p_return;
 }
 
+#ifdef MAYU_UNIX
 double mayu::ping(const QString &host, int tries, double timeout)
 {
     double latency;
     pingobj_t *pingObj;
     pingobj_iter_t *pingIter;
     if ((pingObj = ping_construct()) == NULL) {
-#ifdef E_DEBUG
-        qDebug() << "Ping construction failed";
-#endif
+        QTextStream(stderr) << "Ping construction failed " << endl;
         return -1;
     }
     if (ping_setopt(pingObj, PING_OPT_TIMEOUT, (void*)(&timeout)) < 0) {
-#ifdef E_DEBUG
-        qDebug() << "Setting timeout to" << timeout << "have failed";
-#endif
+        QTextStream(stderr) << "Setting timeout to"  << timeout << " have failed" << endl;
         ping_destroy(pingObj);
         return -1;
     }
@@ -148,9 +169,7 @@ double mayu::ping(const QString &host, int tries, double timeout)
     int curTry = 0;
     while (!hostUp && curTry != tries) {
         if (ping_send(pingObj) < 0) {
-#ifdef E_DEBUG
-            qDebug() << "Pinging host" << host << " has failed";
-#endif
+            QTextStream(stderr) << "Pinging host " << host << " has failed" << endl;
             ping_destroy(pingObj);
             return -1;
         }
@@ -165,7 +184,7 @@ double mayu::ping(const QString &host, int tries, double timeout)
             char hostname[100];
             len = 100;
             ping_iterator_get_info(pingIter, PING_INFO_HOSTNAME, hostname, &len);
-            qDebug() << hostname << latency << pingSuccess;
+            QTextStream(stdout) << "Host: " << hostname << " Ping: " << latency << "ms" << " Status: " << (pingSuccess ? "true" : "false") << endl;
 #endif
         }
         if (pingSuccess) {
@@ -178,14 +197,44 @@ double mayu::ping(const QString &host, int tries, double timeout)
         return latency;
     return -1;
 }
+#endif
+
+const QList<mayuResult> mayu::resolve(const QString &host)
+{
+    QList<mayuResult> resultList;
+    QList<QHostAddress> hostAddresses = QHostInfo::fromName(host).addresses();
+    if (hostAddresses.length() >= 1) {
+        for (const QHostAddress &hostAddress : hostAddresses) {
+#ifdef E_DEBUG
+            qDebug() << "Hostname" << host << "found and resolved" << hostAddress.toString();
+#endif
+            mayuResult m_result;
+            m_result.host = host;
+            m_result.result = hostAddress.toString();
+            resultList += m_result;
+        }
+    }
+    else {
+#ifdef E_DEBUG
+        qDebug() << "Hostname" << host << "not found";
+#endif
+        mayuResult m_result;
+        m_result.host = host;
+        m_result.result = "-1";
+        resultList += m_result;
+    }
+    return resultList;
+}
 
 void mayu::parse_hosts()
 {
     p_hostsList.clear();
-    if (!dropPrivileges()) {
+#ifdef PRIVILEGE_DROP_REQUIRED
+    if (!p_dropPrivileges()) {
         p_return = 2;
         return;
     }
+#endif
     QFile hostsFile(p_hostsFile);
     if (hostsFile.open(QFile::ReadOnly)) {
         const QList<QByteArray> hostsArray = hostsFile.readAll().split('\n');
@@ -210,57 +259,104 @@ void mayu::parse_hosts()
     }
     else
     {
-        qCritical() << "Failed read hosts from" << p_hostsFile;
+        QTextStream(stderr) << "Failed read hosts from " << p_hostsFile << endl;
     }
-    if (!regainPrivileges()) {
+#ifdef PRIVILEGE_DROP_REQUIRED
+    if (!p_regainPrivileges()) {
         p_return = 3;
         return;
     }
+#endif
+}
+
+void mayu::p_saveWork(QJsonObject jsonObject)
+{
+    QJsonDocument jsonDocument;
+    jsonDocument.setObject(jsonObject);
+    QByteArray jsonArray = jsonDocument.toJson();
+#ifdef PRIVILEGE_DROP_REQUIRED
+    if (!p_dropPrivileges()) {
+        p_return = 2;
+        return;
+    }
+#endif
+    QSaveFile jsonFile(p_jsonFile);
+    if (jsonFile.open(QSaveFile::WriteOnly)) {
+        jsonFile.write(jsonArray);
+        if (!jsonFile.commit()) {
+            QTextStream(stderr) << "Failed save result to " << p_jsonFile << " because file can't be saved!" << endl;
+            p_return = 1;
+        }
+    }
+    else {
+        QTextStream(stderr) << "Failed save result to " << p_jsonFile << " because file can't be opened!" << endl;
+        p_return = 1;
+    }
+#ifdef PRIVILEGE_DROP_REQUIRED
+    if (!p_regainPrivileges()) {
+        p_return = 3;
+        return;
+    }
+#endif
+    p_return = 0;
 }
 
 void mayu::work()
+{
+    switch(p_mayuMode) {
+    case mayuMode::Ping:
+#ifdef MAYU_UNIX
+        p_workPing();
+#else
+        QTextStream(stderr) << "Mayu doesn't support pinging on your Operating System!" << endl;
+#endif
+        break;
+    case mayuMode::Resolve:
+        p_workResolve();
+        break;
+    }
+}
+
+#ifdef MAYU_UNIX
+void mayu::p_workPing()
 {
     if (!p_hostsParsed)
         parse_hosts();
     QJsonObject jsonObject;
     const QStringList hostsList = getHosts();
     for (const QString &host : hostsList) {
-        double result = ping(host, p_tries);
+        double result = ping(host, p_tries, p_timeout);
         jsonObject[host] = result;
     }
-    QJsonDocument jsonDocument;
-    jsonDocument.setObject(jsonObject);
-    QByteArray jsonArray = jsonDocument.toJson();
-    if (!dropPrivileges()) {
-        p_return = 2;
-        return;
-    }
-    QSaveFile jsonFile(p_jsonFile);
-    if (jsonFile.open(QSaveFile::WriteOnly)) {
-        jsonFile.write(jsonArray);
-        if (!jsonFile.commit()) {
-            qCritical() << "Failed save result to" << p_jsonFile << "because file can't be saved!";
-            p_return = 1;
+    p_saveWork(jsonObject);
+}
+#endif
+
+void mayu::p_workResolve()
+{
+    if (!p_hostsParsed)
+        parse_hosts();
+    QJsonObject jsonObject;
+    const QStringList hostsList = getHosts();
+    for (const QString &host : hostsList) {
+        const QList<mayuResult> resultList = resolve(host);
+        QJsonArray arrayList;
+        for (const mayuResult &result : resultList) {
+            arrayList += result.result;
         }
+        jsonObject[host] = arrayList;
     }
-    else {
-        qCritical() << "Failed save result to" << p_jsonFile << "because file can't be opened!";
-        p_return = 1;
-    }
-    if (!regainPrivileges()) {
-        p_return = 3;
-        return;
-    }
-    p_return = 0;
+    p_saveWork(jsonObject);
 }
 
-bool mayu::dropPrivileges()
+#ifdef PRIVILEGE_DROP_REQUIRED
+bool mayu::p_dropPrivileges()
 {
 #if _POSIX_SAVED_IDS
     p_uid = geteuid();
     int status = seteuid(getuid());
     if (status != 0) {
-        qCritical() << "Dropping of privileges has failed!";
+        QTextStream(stderr) << "Dropping of privileges has failed!" << endl;
         return false;
     }
     return true;
@@ -269,12 +365,12 @@ bool mayu::dropPrivileges()
 #endif
 }
 
-bool mayu::regainPrivileges()
+bool mayu::p_regainPrivileges()
 {
 #if _POSIX_SAVED_IDS
     int status = seteuid(p_uid);
     if (status != 0) {
-        qCritical() << "Regaining of privileges has failed!";
+        QTextStream(stderr) << "Regaining of privileges has failed!" << endl;
         return false;
     }
     return true;
@@ -282,3 +378,4 @@ bool mayu::regainPrivileges()
     return false;
 #endif
 }
+#endif

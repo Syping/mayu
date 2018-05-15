@@ -16,6 +16,9 @@
 *****************************************************************************/
 
 #include <QCoreApplication>
+#include <QStringList>
+#include <QTextStream>
+#include <QString>
 #include <QDebug>
 #include "mayu.h"
 
@@ -28,10 +31,27 @@ int main(int argc, char *argv[])
     QStringList arguments = a.arguments();
     arguments.removeAt(0);
 
+    mayuMode a_mode = mayuMode::Ping;
+    for (int i = arguments.length(); i > 0; i--) {
+        const QString &argument = arguments.at(i-1);
+        if (argument == "-p" || argument == "--ping") {
+            a_mode = mayuMode::Ping;
+            arguments.removeAt(i-1);
+        }
+        else if (argument == "-r" || argument == "--resolve") {
+            a_mode = mayuMode::Resolve;
+            arguments.removeAt(i-1);
+        }
+    }
+
     if (arguments.length() >= 2) {
         mayu a_mayu(arguments.at(0), arguments.at(1));
+        a_mayu.setMayuMode(a_mode);
         a_mayu.work();
         return a_mayu.getResult();
+    }
+    else {
+        QTextStream(stdout) << "Usage: " << a.arguments().at(0) << " [-p ping]" << " [-r resolve]" << " input.txt" << " output.json" << endl;
     }
 
     return 0;

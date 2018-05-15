@@ -21,38 +21,64 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QStringList>
+#include <QJsonArray>
 #include <QObject>
+#include <QList>
+
+enum class mayuMode : int{Ping = 0, Resolve = 1};
+struct mayuResult {
+    QString host;
+    QString result;
+};
 
 class mayu : public QObject
 {
     Q_OBJECT
 public:
-    explicit mayu(const QString &hostsFile = QString(), const QString &jsonFile = QString(), int tries = 4, QObject *parent = nullptr);
+    explicit mayu(const QString &hostsFile = QString(), const QString &jsonFile = QString(), QObject *parent = nullptr);
+    void setMayuMode(mayuMode mode);
     void setHostsFile(const QString &fileName);
     void setHosts(const QStringList &hostsList);
     void setJsonFile(const QString &fileName);
-    void setMaxTries(int tries);
+    void setPingTimeout(double timeout);
+    void setPingTries(int tries);
+    mayuMode getMayuMode();
     const QString getHostsFile();
     const QStringList getHosts();
     const QString getJsonFile();
-    int getMaxTries();
+    double getPingTimeout();
+    int getPingTries();
     int getResult();
+#ifdef MAYU_UNIX
     static double ping(const QString &host, int tries, double timeout = 2.5);
+#endif
+    static const QList<mayuResult> resolve(const QString &host);
 
 public slots:
     void parse_hosts();
     void work();
 
 private:
-    bool dropPrivileges();
-    bool regainPrivileges();
+#ifdef PRIVILEGE_DROP_REQUIRED
+    bool p_dropPrivileges();
+    bool p_regainPrivileges();
+#endif
+    void p_saveWork(QJsonObject jsonObject);
+#ifdef MAYU_UNIX
+    void p_workPing();
+#endif
+    void p_workResolve();
     QStringList p_hostsList;
     QString p_hostsFile;
     QString p_jsonFile;
+    mayuMode p_mayuMode;
     bool p_hostsParsed;
+    double p_timeout;
     int p_return;
     int p_tries;
+#ifdef PRIVILEGE_DROP_REQUIRED
     uid_t p_uid;
+#endif
 };
 
 #endif // MAYU_H
