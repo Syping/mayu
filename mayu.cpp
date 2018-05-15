@@ -37,6 +37,7 @@ mayu::mayu(const QString &hostsFile, const QString &jsonFile, QObject *parent) :
     p_return = -1;
     p_timeout = 2.5;
     p_tries = 4;
+    p_clean = false;
     p_mayuMode = mayuMode::Ping;
     if (!hostsFile.isEmpty())
         setHostsFile(hostsFile);
@@ -76,6 +77,11 @@ void mayu::setPingTries(int tries)
     p_tries = tries;
 }
 
+void mayu::setCleanUp(bool clean)
+{
+    p_clean = clean;
+}
+
 mayuMode mayu::getMayuMode()
 {
     return p_mayuMode;
@@ -104,6 +110,11 @@ double mayu::getPingTimeout()
 int mayu::getPingTries()
 {
     return p_tries;
+}
+
+bool mayu::getCleanUp()
+{
+    return p_clean;
 }
 
 int mayu::getResult()
@@ -184,7 +195,14 @@ double mayu::ping(const QString &host, int tries, double timeout)
             char hostname[100];
             len = 100;
             ping_iterator_get_info(pingIter, PING_INFO_HOSTNAME, hostname, &len);
-            QTextStream(stdout) << "Host: " << hostname << " Ping: " << latency << "ms" << " Status: " << (pingSuccess ? "true" : "false") << endl;
+            QString latencyString;
+            if (latency != -1) {
+                latencyString = QString::number(latency) + "ms";
+            }
+            else {
+                latencyString = QString::number(latency);
+            }
+            QTextStream(stdout) << "Host: " << hostname << " Ping: " << latencyString << " Status: " << (pingSuccess ? "true" : "false") << endl;
 #endif
         }
         if (pingSuccess) {
@@ -199,7 +217,7 @@ double mayu::ping(const QString &host, int tries, double timeout)
 }
 #endif
 
-const QList<mayuResult> mayu::resolve(const QString &host)
+const QList<mayuResult> mayu::resolve(const QString &host, bool emptyWhenError)
 {
     QList<mayuResult> resultList;
     QList<QHostAddress> hostAddresses = QHostInfo::fromName(host).addresses();
@@ -218,10 +236,12 @@ const QList<mayuResult> mayu::resolve(const QString &host)
 #ifdef E_DEBUG
         qDebug() << "Hostname" << host << "not found";
 #endif
-        mayuResult m_result;
-        m_result.host = host;
-        m_result.result = "-1";
-        resultList += m_result;
+        if (!emptyWhenError) {
+            mayuResult m_result;
+            m_result.host = host;
+            m_result.result = "-1";
+            resultList += m_result;
+        }
     }
     return resultList;
 }
@@ -326,7 +346,9 @@ void mayu::p_workPing()
     const QStringList hostsList = getHosts();
     for (const QString &host : hostsList) {
         double result = ping(host, p_tries, p_timeout);
-        jsonObject[host] = result;
+        if (!(result == -1 && p_clean)) {
+            jsonObject[host] = result;
+        }
     }
     p_saveWork(jsonObject);
 }
@@ -339,12 +361,13 @@ void mayu::p_workResolve()
     QJsonObject jsonObject;
     const QStringList hostsList = getHosts();
     for (const QString &host : hostsList) {
-        const QList<mayuResult> resultList = resolve(host);
+        const QList<mayuResult> resultList = resolve(host, p_clean);
         QJsonArray arrayList;
         for (const mayuResult &result : resultList) {
             arrayList += result.result;
         }
-        jsonObject[host] = arrayList;
+        if (!arrayList.isEmpty())
+            jsonObject[host] = arrayList;
     }
     p_saveWork(jsonObject);
 }

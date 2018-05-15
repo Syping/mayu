@@ -42,17 +42,19 @@ public:
     void setJsonFile(const QString &fileName);
     void setPingTimeout(double timeout);
     void setPingTries(int tries);
+    void setCleanUp(bool clean);
     mayuMode getMayuMode();
     const QString getHostsFile();
     const QStringList getHosts();
     const QString getJsonFile();
     double getPingTimeout();
     int getPingTries();
+    bool getCleanUp();
     int getResult();
 #ifdef MAYU_UNIX
     static double ping(const QString &host, int tries, double timeout = 2.5);
 #endif
-    static const QList<mayuResult> resolve(const QString &host);
+    static const QList<mayuResult> resolve(const QString &host, bool emptyWhenError = false);
 
 public slots:
     void parse_hosts();
@@ -76,6 +78,7 @@ private:
     double p_timeout;
     int p_return;
     int p_tries;
+    bool p_clean;
 #ifdef PRIVILEGE_DROP_REQUIRED
     uid_t p_uid;
 #endif
