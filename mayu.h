@@ -65,7 +65,8 @@ private:
     bool p_dropPrivileges();
     bool p_regainPrivileges();
 #endif
-    void p_saveWork(QJsonObject jsonObject);
+    void p_saveWork(const QJsonObject &jsonObject);
+    void p_workHosts(const QList<QByteArray> &hostsArray);
 #ifdef MAYU_UNIX
     void p_workPing();
 #endif

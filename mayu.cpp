@@ -16,6 +16,8 @@
 *****************************************************************************/
 
 #include <QHostAddress>
+#include <QTextStream>
+#include <QDataStream>
 #include <QEventLoop>
 #include <QHostInfo>
 #include <QSaveFile>
@@ -144,7 +146,7 @@ double mayu::ping(const QString &host, int tries, double timeout)
             return -1;
         }
 #ifdef E_DEBUG
-        qDebug() << "IPv4 Address" << hostAddress.toString() << "found";
+        QTextStream(stderr) << "IPv4 Address " << hostAddress.toString() << " found" << endl;
 #endif
     }
     else if (QAbstractSocket::IPv6Protocol == hostAddress.protocol()) {
@@ -153,7 +155,7 @@ double mayu::ping(const QString &host, int tries, double timeout)
             return -1;
         }
 #ifdef E_DEBUG
-        qDebug() << "IPv6 Address" << hostAddress.toString() << "found";
+        QTextStream(stderr) << "IPv6 Address " << hostAddress.toString() << " found" << endl;
 #endif
     }
     else {
@@ -165,12 +167,12 @@ double mayu::ping(const QString &host, int tries, double timeout)
                 return -1;
             }
 #ifdef E_DEBUG
-            qDebug() << "Hostname" << host << "found and resolved" << ipStr;
+            QTextStream(stderr) << "Hostname " << host << " found and resolved " << ipStr << endl;
 #endif
         }
         else {
 #ifdef E_DEBUG
-            qDebug() << "Hostname" << host << "not found";
+            QTextStream(stderr) << "Hostname " << host << " not found" << endl;
 #endif
             ping_destroy(pingObj);
             return -1;
@@ -202,7 +204,7 @@ double mayu::ping(const QString &host, int tries, double timeout)
             else {
                 latencyString = QString::number(latency);
             }
-            QTextStream(stdout) << "Host: " << hostname << " Ping: " << latencyString << " Status: " << (pingSuccess ? "true" : "false") << endl;
+            QTextStream(stderr) << "Host: " << hostname << " Ping: " << latencyString << " Status: " << (pingSuccess ? "true" : "false") << endl;
 #endif
         }
         if (pingSuccess) {
@@ -224,7 +226,7 @@ const QList<mayuResult> mayu::resolve(const QString &host, bool emptyWhenError)
     if (hostAddresses.length() >= 1) {
         for (const QHostAddress &hostAddress : hostAddresses) {
 #ifdef E_DEBUG
-            qDebug() << "Hostname" << host << "found and resolved" << hostAddress.toString();
+            QTextStream(stderr) << "Hostname " << host << " found and resolved " << hostAddress.toString() << endl;
 #endif
             mayuResult m_result;
             m_result.host = host;
@@ -234,7 +236,7 @@ const QList<mayuResult> mayu::resolve(const QString &host, bool emptyWhenError)
     }
     else {
 #ifdef E_DEBUG
-        qDebug() << "Hostname" << host << "not found";
+        QTextStream(stderr) << "Hostname " << host << " not found" << endl;
 #endif
         if (!emptyWhenError) {
             mayuResult m_result;
@@ -249,75 +251,73 @@ const QList<mayuResult> mayu::resolve(const QString &host, bool emptyWhenError)
 void mayu::parse_hosts()
 {
     p_hostsList.clear();
+    if (p_hostsFile != "-") {
 #ifdef PRIVILEGE_DROP_REQUIRED
-    if (!p_dropPrivileges()) {
-        p_return = 2;
-        return;
-    }
-#endif
-    QFile hostsFile(p_hostsFile);
-    if (hostsFile.open(QFile::ReadOnly)) {
-        const QList<QByteArray> hostsArray = hostsFile.readAll().split('\n');
-        for (const QByteArray &lineArray : hostsArray) {
-            QString lineStr = QString::fromUtf8(lineArray).trimmed();
-            if (!lineStr.isEmpty()) {
-                QStringList lineStrList = lineStr.split(',');
-                QString hostStr;
-                QString alternativeStr;
-                if (lineStrList.length() >= 1) {
-                    hostStr = lineStrList.at(0);
-                    lineStrList.removeAt(0);
-                    if (lineStrList.length() >= 1) {
-                        alternativeStr = lineStrList.join(','); // Alternative Name in Future Version
-                    }
-                    p_hostsList += hostStr;
-                }
-            }
+        if (!p_dropPrivileges()) {
+            p_return = 2;
+            return;
         }
-        hostsFile.close();
+#endif
+        QFile hostsFile(p_hostsFile);
+        if (hostsFile.open(QFile::ReadOnly)) {
+            const QList<QByteArray> hostsArray = hostsFile.readAll().split('\n');
+            hostsFile.close();
+            p_workHosts(hostsArray);
+            p_hostsParsed = true;
+        }
+        else
+        {
+            QTextStream(stderr) << "Failed read hosts from " << p_hostsFile << endl;
+        }
+#ifdef PRIVILEGE_DROP_REQUIRED
+        if (!p_regainPrivileges()) {
+            p_return = 3;
+            return;
+        }
+#endif
+    }
+    else {
+        QByteArray b_hostsArray = QTextStream(stdin).readAll().replace("\\n", "\n").toUtf8();
+        const QList<QByteArray> hostsArray = b_hostsArray.split('\n');
+        p_workHosts(hostsArray);
         p_hostsParsed = true;
     }
-    else
-    {
-        QTextStream(stderr) << "Failed read hosts from " << p_hostsFile << endl;
-    }
-#ifdef PRIVILEGE_DROP_REQUIRED
-    if (!p_regainPrivileges()) {
-        p_return = 3;
-        return;
-    }
-#endif
 }
 
-void mayu::p_saveWork(QJsonObject jsonObject)
+void mayu::p_saveWork(const QJsonObject &jsonObject)
 {
     QJsonDocument jsonDocument;
     jsonDocument.setObject(jsonObject);
     QByteArray jsonArray = jsonDocument.toJson();
+    if (p_jsonFile != "-") {
 #ifdef PRIVILEGE_DROP_REQUIRED
-    if (!p_dropPrivileges()) {
-        p_return = 2;
-        return;
-    }
+        if (!p_dropPrivileges()) {
+            p_return = 2;
+            return;
+        }
 #endif
-    QSaveFile jsonFile(p_jsonFile);
-    if (jsonFile.open(QSaveFile::WriteOnly)) {
-        jsonFile.write(jsonArray);
-        if (!jsonFile.commit()) {
-            QTextStream(stderr) << "Failed save result to " << p_jsonFile << " because file can't be saved!" << endl;
+        QSaveFile jsonFile(p_jsonFile);
+        if (jsonFile.open(QSaveFile::WriteOnly)) {
+            jsonFile.write(jsonArray);
+            if (!jsonFile.commit()) {
+                QTextStream(stderr) << "Failed save result to " << p_jsonFile << " because file can't be saved!" << endl;
+                p_return = 1;
+            }
+        }
+        else {
+            QTextStream(stderr) << "Failed save result to " << p_jsonFile << " because file can't be opened!" << endl;
             p_return = 1;
         }
+#ifdef PRIVILEGE_DROP_REQUIRED
+        if (!p_regainPrivileges()) {
+            p_return = 3;
+            return;
+        }
+#endif
     }
     else {
-        QTextStream(stderr) << "Failed save result to " << p_jsonFile << " because file can't be opened!" << endl;
-        p_return = 1;
+        QTextStream(stdout) << jsonArray;
     }
-#ifdef PRIVILEGE_DROP_REQUIRED
-    if (!p_regainPrivileges()) {
-        p_return = 3;
-        return;
-    }
-#endif
     p_return = 0;
 }
 
@@ -334,6 +334,26 @@ void mayu::work()
     case mayuMode::Resolve:
         p_workResolve();
         break;
+    }
+}
+
+void mayu::p_workHosts(const QList<QByteArray> &hostsArray)
+{
+    for (const QByteArray &lineArray : hostsArray) {
+        QString lineStr = QString::fromUtf8(lineArray).trimmed();
+        if (!lineStr.isEmpty()) {
+            QStringList lineStrList = lineStr.split(',');
+            QString hostStr;
+            QString alternativeStr;
+            if (lineStrList.length() >= 1) {
+                hostStr = lineStrList.at(0);
+                lineStrList.removeAt(0);
+                if (lineStrList.length() >= 1) {
+                    alternativeStr = lineStrList.join(','); // Alternative Name in Future Version
+                }
+                p_hostsList += hostStr;
+            }
+        }
     }
 }
 
