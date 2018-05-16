@@ -35,26 +35,43 @@ int main(int argc, char *argv[])
     mayuMode a_mode = mayuMode::Ping;
     for (int i = arguments.length(); i > 0; i--) {
         const QString &argument = arguments.at(i-1);
-        if (argument == "-p" || argument == "--ping") {
-            a_mode = mayuMode::Ping;
-            arguments.removeAt(i-1);
+        if (argument.left(2) == "--") {
+            if (argument == "--ping") {
+                a_mode = mayuMode::Ping;
+                arguments.removeAt(i-1);
+            }
+            else if (argument == "--resolve") {
+                a_mode = mayuMode::Resolve;
+                arguments.removeAt(i-1);
+            }
+            else if (argument == "--clean") {
+                a_clean = true;
+                arguments.removeAt(i-1);
+            }
+            else {
+                QTextStream(stderr) << "Unknown Option found: " << argument << endl;
+                return 4;
+            }
         }
-        else if (argument == "-r" || argument == "--resolve") {
-            a_mode = mayuMode::Resolve;
-            arguments.removeAt(i-1);
-        }
-        else if (argument == "-c" || argument == "--clean") {
-            a_clean = true;
-            arguments.removeAt(i-1);
-        }
-        else if (argument == "-pc" || argument == "-cp") {
-            a_mode = mayuMode::Ping;
-            a_clean = true;
-            arguments.removeAt(i-1);
-        }
-        else if (argument == "-rc" || argument == "-cr") {
-            a_mode = mayuMode::Resolve;
-            a_clean = true;
+        else if (argument.left(1) == "-" && argument.length() != 1) {
+            for (int ii = argument.length(); ii > 0; ii--) {
+                switch (argument.at(ii-1).cell()) {
+                case 'p':
+                    a_mode = mayuMode::Ping;
+                    break;
+                case 'r':
+                    a_mode = mayuMode::Resolve;
+                    break;
+                case 'c':
+                    a_clean = true;
+                    break;
+                case '-':
+                    break;
+                default:
+                    QTextStream(stderr) << "Unknown Option found: " << argument.at(ii-1) << endl;
+                    return 4;
+                }
+            }
             arguments.removeAt(i-1);
         }
     }
@@ -67,7 +84,7 @@ int main(int argc, char *argv[])
         return a_mayu.getResult();
     }
     else {
-        QTextStream(stdout) << "Usage: " << a.arguments().at(0) << " [-p ping]" << " [-r resolve]" << " [-c clean]" << " input.txt" << " output.json" << endl;
+        QTextStream(stderr) << "Usage: " << a.arguments().at(0) << " [-p ping]" << " [-r resolve]" << " [-c clean]" << " input.txt" << " output.json" << endl;
     }
 
     return 0;
