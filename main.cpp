@@ -84,7 +84,7 @@ int main(int argc, char *argv[])
         return a_mayu.getResult();
     }
     else {
-        QTextStream(stderr) << "Usage: " << a.arguments().at(0) << " [-p ping]" << " [-r resolve]" << " [-c clean]" << " input.txt" << " output.json" << endl;
+        QTextStream(stderr) << "Usage: " << a.arguments().at(0) << " [-cpr]" << " [--clean]" << " [--ping]" << " [--resolve]" << " [HOSTS FILE]" << " [OUTPUT FILE]" << endl;
     }
 
     return 0;
