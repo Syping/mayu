@@ -1,6 +1,6 @@
 /*****************************************************************************
 * mayu Mate Are You Up
-* Copyright (C) 2018 Syping
+* Copyright (C) 2019 Syping
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -82,6 +82,7 @@ private:
     bool p_clean;
 #ifdef PRIVILEGE_DROP_REQUIRED
     uid_t p_uid;
+    gid_t p_gid;
 #endif
 };
 

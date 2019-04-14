@@ -1,6 +1,6 @@
 /*****************************************************************************
 * mayu Mate Are You Up
-* Copyright (C) 2018 Syping
+* Copyright (C) 2019 Syping
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -403,7 +403,13 @@ bool mayu::p_dropPrivileges()
 {
 #if _POSIX_SAVED_IDS
     p_uid = geteuid();
+    p_gid = getegid();
     int status = seteuid(getuid());
+    if (status != 0) {
+        QTextStream(stderr) << "Dropping of privileges has failed!" << endl;
+        return false;
+    }
+    status = setegid(getgid());
     if (status != 0) {
         QTextStream(stderr) << "Dropping of privileges has failed!" << endl;
         return false;
@@ -418,6 +424,11 @@ bool mayu::p_regainPrivileges()
 {
 #if _POSIX_SAVED_IDS
     int status = seteuid(p_uid);
+    if (status != 0) {
+        QTextStream(stderr) << "Regaining of privileges has failed!" << endl;
+        return false;
+    }
+    status = setegid(p_gid);
     if (status != 0) {
         QTextStream(stderr) << "Regaining of privileges has failed!" << endl;
         return false;
